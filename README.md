@@ -1,12 +1,12 @@
 <div align="center">
 
-# json-shift
+# jsonshift
 
 **IoT 物模型的属性映射库**
 
 一份后台可配的映射关系，在 **平台标准格式** 与 **厂商设备格式** 之间双向转换。
 
-[![Go Reference](https://pkg.go.dev/badge/github.com/itmisx/json-shift.svg)](https://pkg.go.dev/github.com/itmisx/json-shift)
+[![Go Reference](https://pkg.go.dev/badge/github.com/itmisx/jsonshift.svg)](https://pkg.go.dev/github.com/itmisx/jsonshift)
 ![Go](https://img.shields.io/badge/go-%3E%3D1.24-00ADD8?logo=go&logoColor=white)
 ![Dependencies](https://img.shields.io/badge/依赖-0-brightgreen)
 ![Concurrency](https://img.shields.io/badge/并发-预编译后只读-blue)
@@ -44,7 +44,7 @@ flowchart LR
 
 这里把映射表达为一组 **可逆的路径对**，值变换写成 **可自动求逆的表达式**：
 
-| | 常规方案 | json-shift |
+| | 常规方案 | jsonshift |
 | --- | --- | --- |
 | 配置份数 | 上行、下行各一份 | **一份** |
 | 值变换 | 单向算子链 | 可自动求逆的表达式 |
@@ -70,7 +70,7 @@ flowchart LR
 ## 📦 安装
 
 ```sh
-go get github.com/itmisx/json-shift
+go get github.com/itmisx/jsonshift
 ```
 
 > 需要 Go 1.24+，零第三方依赖。
@@ -84,7 +84,7 @@ go get github.com/itmisx/json-shift
 
 ```json
 {
-  "schema": "github.com/itmisx/json-shift",
+  "schema": "github.com/itmisx/jsonshift",
   "name": "vendor-x-thermostat",
   "map": {
     "dev_sn": "deviceId",
@@ -144,7 +144,7 @@ s.Downlink([]byte(`{"deviceId":"SN-001","properties":{"temperature":23.5,"powerS
 
 ```json
 {
-  "schema": "github.com/itmisx/json-shift",
+  "schema": "github.com/itmisx/jsonshift",
   "name": "vendor-x-thermostat",
   "map": {
     "dev_sn": "deviceId",
@@ -178,7 +178,7 @@ s.Downlink([]byte(`{"deviceId":"SN-001","properties":{"temperature":23.5,"powerS
 | 字段 | 必填 | 说明 |
 | :--- | :-: | :--- |
 | `map` | ✅ | 映射表 |
-| `schema` | — | 填了必须是 `github.com/itmisx/json-shift` 或 `jsonshift/v1`。用处是将来格式升级时后台能认出旧配置 |
+| `schema` | — | 填了必须是 `github.com/itmisx/jsonshift` 或 `jsonshift/v1`。用处是将来格式升级时后台能认出旧配置 |
 | `name` | — | 仅作标识 |
 
 只有一张表时外层可以整个省掉，直接写 `{"dev_sn": "deviceId"}`。

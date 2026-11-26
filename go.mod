@@ -1,3 +1,3 @@
-module github.com/itmisx/json-shift
+module github.com/itmisx/jsonshift
 
 go 1.24

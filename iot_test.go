@@ -12,7 +12,7 @@ import (
 
 // 物模型配置：一份配置同时服务下发与上报。
 const thermostatCfg = `{
-  "schema": "github.com/itmisx/json-shift",
+  "schema": "github.com/itmisx/jsonshift",
   "name": "vendor-x-thermostat",
   "map": {
     "dev_sn": "deviceId",

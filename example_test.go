@@ -3,7 +3,7 @@ package jsonshift_test
 import (
 	"fmt"
 
-	jsonshift "github.com/itmisx/json-shift"
+	"github.com/itmisx/jsonshift"
 )
 
 // 只改路径时，配置就是一张平铺表：键是设备侧路径，值是平台侧路径，
@@ -39,7 +39,7 @@ func Example_flatForm() {
 // 需要缩放、枚举一类的值变换时，把这些属性挪到 fields；两种写法可以混用。
 func Example_iotProperty() {
 	cfg := []byte(`{
-      "schema": "github.com/itmisx/json-shift",
+      "schema": "github.com/itmisx/jsonshift",
       "name":   "vendor-x-thermostat",
       "map": {
         "dev_sn": "deviceId",

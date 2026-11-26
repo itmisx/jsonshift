@@ -132,7 +132,7 @@ type Mapping struct {
 
 // 配置格式标识。可留空；填错则在解析阶段报错，避免把别的格式喂进来。
 const (
-	SchemaModulePath = "github.com/itmisx/json-shift"
+	SchemaModulePath = "github.com/itmisx/jsonshift"
 	SchemaV1         = "jsonshift/v1"
 )
 
@@ -140,7 +140,7 @@ const (
 // 键是设备侧路径，值可以是平台侧路径（只改路径），也可以是带选项的对象：
 //
 //	{
-//	  "schema": "github.com/itmisx/json-shift",
+//	  "schema": "github.com/itmisx/jsonshift",
 //	  "name":   "vendor-x-thermostat",
 //	  "map": {
 //	    "dev_sn": "deviceId",

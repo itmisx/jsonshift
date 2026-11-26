@@ -103,7 +103,7 @@ func tokenize(src string) ([]token, error) {
 				}
 			}
 			if j < 0 {
-				return nil, fmt.Errorf("表达式 %q 里的 { 缺少配对的 }", src)
+				return nil, fmt.Errorf("表达式 %q 里的 '{' 缺少配对的 '}'", src)
 			}
 			ref := strings.TrimSpace(string(r[i+1 : j]))
 			if ref == "" {
@@ -265,7 +265,7 @@ func (p *parser) parseTernary() (exprNode, error) {
 		return nil, err
 	}
 	if c, ok := p.peek(); !ok || c.kind != tkColon {
-		return nil, fmt.Errorf("表达式 %q 里的 ? 缺少配对的 :", p.src)
+		return nil, fmt.Errorf("表达式 %q 里的 '?' 缺少配对的 ':'", p.src)
 	}
 	p.pos++
 	no, err := p.parseTernary()

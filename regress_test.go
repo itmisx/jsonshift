@@ -68,7 +68,7 @@ func TestRegressNaNInfRejected(t *testing.T) {
 func TestRegressShorthandReservedKeys(t *testing.T) {
 	for _, cfg := range []string{
 		`{"schema":"jsonshift/v1","name":"n"}`,
-		`{"schema":"github.com/itmisx/json-shift","dev_sn":"deviceId"}`,
+		`{"schema":"github.com/itmisx/jsonshift","dev_sn":"deviceId"}`,
 		`{"name":"vendor-x","dev_sn":"deviceId"}`,
 	} {
 		m, err := ParseMapping([]byte(cfg))

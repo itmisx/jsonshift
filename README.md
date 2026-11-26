@@ -6,6 +6,7 @@
 
 一份后台可配的映射关系，在 **平台标准格式** 与 **厂商设备格式** 之间双向转换。
 
+[![CI](https://github.com/itmisx/jsonshift/actions/workflows/ci.yml/badge.svg)](https://github.com/itmisx/jsonshift/actions/workflows/ci.yml)
 [![Go Reference](https://pkg.go.dev/badge/github.com/itmisx/jsonshift.svg)](https://pkg.go.dev/github.com/itmisx/jsonshift)
 ![Go](https://img.shields.io/badge/go-%3E%3D1.24-00ADD8?logo=go&logoColor=white)
 ![Dependencies](https://img.shields.io/badge/依赖-0-brightgreen)
@@ -675,13 +676,44 @@ var shifters sync.Map // productKey -> *jsonshift.Shifter
 ```sh
 gofmt -l .               # 格式
 go vet ./...             # 静态检查
+staticcheck ./...        # 进一步的静态检查
 go test ./...            # 单测 + 可执行示例
 go test -race ./...      # 并发安全
 go test -bench=. ./...   # 基准
 go test -cover ./...     # 覆盖率
 ```
 
-CI（`.github/workflows/ci.yml`）在每次 push / PR 上跑上面全部步骤。
+### CI
+
+`.github/workflows/ci.yml` 在每次 push / PR 上跑：
+
+| 任务 | 内容 |
+| :--- | :--- |
+| **静态检查** | `gofmt` · `go vet` · `staticcheck` · `go mod tidy` 无改动 · **断言零第三方依赖** |
+| **测试** | Go 1.24（go.mod 声明的最低版本）与 stable 各一轮；stable 另跑 macOS / Windows |
+| | 单测 + 示例 · `-race` · 基准冒烟 · **覆盖率不得低于 85%** |
+
+「零依赖」和「覆盖率下限」是把 README 上的承诺变成断言 —— 徽章说了，CI 就得守得住。
+
+### 发布
+
+推一个语义化版本 tag 即可，`.github/workflows/release.yml` 会自动建 GitHub Release：
+
+```sh
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+发布前的闸门（**全部通过才会创建 Release**）：
+
+1. tag 是合法语义化版本（`v1.2.3` / `v1.2.3-rc.1`）
+2. **主版本号与 module path 一致** —— v2 及以上必须把 `go.mod` 的 module 改成 `.../jsonshift/v2`，否则下游 `go get` 根本拿不到这个版本
+3. `gofmt` · `go vet` · `staticcheck` · 单测 · `-race`
+
+通过之后：按 commit / PR 自动生成 Release Notes（分类规则在 `.github/release.yml`），带 `-` 的 tag 自动标成 prerelease，并主动预热 `proxy.golang.org` 让 pkg.go.dev 尽快建好索引。
+
+> [!CAUTION]
+> **tag 可以删，Go module proxy 的缓存不能。** 某个版本一旦被 proxy 收录就是永久的 —— 这也是上面那些检查必须跑在创建 Release 之前的原因。
 
 ## 📄 许可证
 

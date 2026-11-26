@@ -5,21 +5,34 @@ on:
     branches: [main, master]
   pull_request:
 
+# 同一分支上新的推送会取消尚未跑完的旧任务
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  # 覆盖率下限。本库的逻辑几乎全可测，掉下来通常意味着新代码没带测试。
+  COVERAGE_FLOOR: 85
+
 jobs:
-  test:
+  lint:
+    name: 静态检查
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-go@v5
         with:
-          go-version: '1.24'
+          go-version: stable
 
       - name: gofmt
         run: |
           unformatted=$(gofmt -l .)
           if [ -n "$unformatted" ]; then
-            echo "以下文件未格式化，请运行 gofmt -w ."
+            echo "::error::以下文件未格式化，请运行 gofmt -w ."
             echo "$unformatted"
             exit 1
           fi
@@ -27,14 +40,78 @@ jobs:
       - name: go vet
         run: go vet ./...
 
-      - name: 单测与可执行示例
+      - name: staticcheck
+        uses: dominikh/staticcheck-action@v1
+        with:
+          version: latest
+          install-go: false
+
+      - name: go.mod 是否整洁
+        run: |
+          go mod tidy
+          if ! git diff --quiet -- go.mod go.sum; then
+            echo "::error::go mod tidy 有改动，请提交："
+            git --no-pager diff -- go.mod go.sum
+            exit 1
+          fi
+
+      - name: 确认零第三方依赖
+        run: |
+          # README 的「依赖 0」徽章是承诺，这里把它变成断言
+          deps=$(go list -deps -f '{{if not .Standard}}{{.ImportPath}}{{end}}' ./... |
+                 grep -v '^github.com/itmisx/jsonshift' || true)
+          if [ -n "$deps" ]; then
+            echo "::error::引入了第三方依赖："
+            echo "$deps"
+            exit 1
+          fi
+
+  test:
+    name: 测试 (Go ${{ matrix.go }}, ${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # go.mod 声明的最低版本必须能过，同时跟住当前稳定版
+        go: ['1.24', 'stable']
+        os: [ubuntu-latest]
+        include:
+          # 纯 Go 零依赖，另两个平台各抽一次即可
+          - go: stable
+            os: macos-latest
+          - go: stable
+            os: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ matrix.go }}
+
+      - name: 单测 + 可执行示例
         run: go test -coverprofile=coverage.out ./...
 
       - name: 并发安全
         run: go test -race ./...
 
-      - name: 覆盖率
-        run: go tool cover -func=coverage.out | tail -1
-
-      - name: 基准（只验证能跑通）
+      - name: 基准（只验证能跑通，不比较数值）
         run: go test -bench=. -benchtime=10x -run XXX ./...
+
+      - name: 覆盖率下限 ${{ env.COVERAGE_FLOOR }}%
+        if: matrix.go == 'stable' && matrix.os == 'ubuntu-latest'
+        shell: bash
+        run: |
+          go tool cover -func=coverage.out | tail -1
+          pct=$(go tool cover -func=coverage.out | tail -1 | grep -oE '[0-9.]+%' | tr -d '%')
+          echo "覆盖率 ${pct}%（下限 ${COVERAGE_FLOOR}%）"
+          if awk "BEGIN{exit !($pct < $COVERAGE_FLOOR)}"; then
+            echo "::error::覆盖率 ${pct}% 低于下限 ${COVERAGE_FLOOR}%"
+            exit 1
+          fi
+
+      - name: 上传覆盖率报告
+        if: matrix.go == 'stable' && matrix.os == 'ubuntu-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: coverage.out

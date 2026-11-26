@@ -1,0 +1,23 @@
+# --generate-notes 生成 Release Notes 时的分类规则。
+# 按 PR 标签归类；没打标签的落到「其他改动」。
+changelog:
+  exclude:
+    labels:
+      - skip-changelog
+  categories:
+    - title: 💥 破坏性变更
+      labels: [breaking]
+    - title: ✨ 新功能
+      labels: [feature, enhancement]
+    - title: 🐛 缺陷修复
+      labels: [bug, fix]
+    - title: 📐 语义与校验
+      labels: [semantics, validation]
+    - title: ⚡ 性能
+      labels: [performance]
+    - title: 📝 文档
+      labels: [documentation]
+    - title: 🧪 测试与构建
+      labels: [test, ci, build]
+    - title: 其他改动
+      labels: ['*']

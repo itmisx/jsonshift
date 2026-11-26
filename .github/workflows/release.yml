@@ -1,0 +1,117 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write # 创建 Release 需要写权限
+
+jobs:
+  release:
+    name: 发布 ${{ github.ref_name }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Release Notes 要比对上一个 tag
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+
+      # ---------- 发布前的闸门 ----------
+      # 打错 tag 可以删，但 Go module proxy 一旦缓存了某个版本就是永久的，
+      # 所以这些检查必须在创建 Release 之前跑完。
+
+      - name: 校验 tag 是合法语义化版本
+        # tag 名经 env 传入而不是直接插进脚本：${{ }} 的内容会被原样拼成 shell
+        # 源码，走 env 才不会被当成代码执行。
+        env:
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          tag="$REF_NAME"
+          if ! echo "$tag" | grep -qE '^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$'; then
+            echo "::error::tag $tag 不是合法的语义化版本（形如 v1.2.3 或 v1.2.3-rc.1）"
+            exit 1
+          fi
+          echo "tag=$tag" >> "$GITHUB_ENV"
+
+      - name: 校验主版本号与 module path 一致
+        run: |
+          # Go 的规矩：v2 及以上，module path 必须带 /vN 后缀，否则下游 go get
+          # 根本拿不到这个版本。这是发布 Go 库最容易踩的坑，在这里挡住。
+          major=$(echo "$tag" | sed -E 's/^v([0-9]+)\..*/\1/')
+          modpath=$(go list -m)
+          echo "module path: ${modpath}，主版本: v$major"
+          if [ "$major" -ge 2 ]; then
+            case "$modpath" in
+              */v$major) : ;;
+              *)
+                echo "::error::要发 v${major}，go.mod 的 module 必须改成 $modpath/v$major"
+                exit 1 ;;
+            esac
+          else
+            case "$modpath" in
+              */v[0-9]*)
+                echo "::error::module path $modpath 带了 /vN 后缀，但 tag 是 $tag"
+                exit 1 ;;
+            esac
+          fi
+
+      - name: gofmt
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "::error::以下文件未格式化：$unformatted"
+            exit 1
+          fi
+
+      - name: go vet
+        run: go vet ./...
+
+      - name: staticcheck
+        uses: dominikh/staticcheck-action@v1
+        with:
+          version: latest
+          install-go: false
+
+      - name: 单测 + 可执行示例
+        run: go test ./...
+
+      - name: 并发安全
+        run: go test -race ./...
+
+      # ---------- 发布 ----------
+
+      - name: 创建 GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # 带 - 的预发布版本（v1.0.0-rc.1）标成 prerelease
+          prerelease=""
+          case "$tag" in
+            *-*) prerelease="--prerelease" ;;
+          esac
+
+          gh release create "$tag" \
+            --title "$tag" \
+            --generate-notes \
+            --verify-tag \
+            $prerelease
+
+      - name: 预热 Go module proxy
+        continue-on-error: true # 预热失败不该让发布算失败
+        run: |
+          # 主动请求一次，让 proxy.golang.org 抓取并让 pkg.go.dev 建立索引，
+          # 省得第一个用户去触发（也省得文档页空着）。
+          modpath=$(go list -m)
+          for i in 1 2 3; do
+            if curl -fsS "https://proxy.golang.org/${modpath}/@v/${tag}.info"; then
+              echo "proxy 已收录 ${modpath}@${tag}"
+              exit 0
+            fi
+            echo "第 $i 次未就绪，等 15s 重试"
+            sleep 15
+          done
+          echo "::warning::proxy 预热未成功，pkg.go.dev 可能要晚些才更新"

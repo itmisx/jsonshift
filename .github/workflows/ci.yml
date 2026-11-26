@@ -13,6 +13,13 @@ concurrency:
 permissions:
   contents: read
 
+# Windows runner 默认是 PowerShell，它会把 `-coverprofile=coverage.out` 拆成
+# `-coverprofile=coverage` 和 `.out` 两个参数（go 于是去找一个叫 .out 的包）。
+# 统一用 bash（三个平台的 runner 都自带），顺带免掉 pwsh 的一堆引号怪癖。
+defaults:
+  run:
+    shell: bash
+
 env:
   # 覆盖率下限。本库的逻辑几乎全可测，掉下来通常意味着新代码没带测试。
   COVERAGE_FLOOR: 85
@@ -99,7 +106,6 @@ jobs:
 
       - name: 覆盖率下限 ${{ env.COVERAGE_FLOOR }}%
         if: matrix.go == 'stable' && matrix.os == 'ubuntu-latest'
-        shell: bash
         run: |
           go tool cover -func=coverage.out | tail -1
           pct=$(go tool cover -func=coverage.out | tail -1 | grep -oE '[0-9.]+%' | tr -d '%')

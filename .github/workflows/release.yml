@@ -7,6 +7,10 @@ on:
 permissions:
   contents: write # 创建 Release 需要写权限
 
+defaults:
+  run:
+    shell: bash
+
 jobs:
   release:
     name: 发布 ${{ github.ref_name }}

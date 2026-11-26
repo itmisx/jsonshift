@@ -359,6 +359,91 @@ func TestReversePrefixEdgeCases(t *testing.T) {
 	}
 }
 
+// prefix: / suffix: —— 给值拼固定字符串，反向剥掉。纯加减字符，恰好可逆，
+// 所以走转换器而不是（只处理数值的）表达式。
+func TestAffixConverters(t *testing.T) {
+	cases := []struct {
+		name string
+		a    any // 平台侧（不带）
+		b    any // 设备侧（带）
+	}{
+		{"prefix:SN-", "001", "SN-001"},
+		{"suffix:℃", "23.5", "23.5℃"}, // 多字节后缀
+		{"prefix:a:b:", "x", "a:b:x"}, // 参数里可以带冒号（只在第一个冒号处切）
+		{"prefix: ", "x", " x"},       // 参数原样使用，不 trim
+		{"suffix:-", "", "-"},         // 空字符串也能加
+		{"prefix:SN-", "", "SN-"},     // 剥到空串是允许的
+	}
+	for _, c := range cases {
+		conv, ok := Lookup(c.name)
+		if !ok {
+			t.Errorf("Lookup(%q) 失败", c.name)
+			continue
+		}
+		if got, err := conv.Forward(c.a); err != nil || got != c.b {
+			t.Errorf("%s.Forward(%q) = %#v, %v；期望 %q", c.name, c.a, got, err, c.b)
+		}
+		if got, err := conv.Reverse(c.b); err != nil || got != c.a {
+			t.Errorf("%s.Reverse(%q) = %#v, %v；期望 %q（往返不一致）", c.name, c.b, got, err, c.a)
+		}
+	}
+}
+
+func TestAffixConverterErrors(t *testing.T) {
+	// 参数为空：加空前缀是空操作，剥也无从剥起
+	for _, name := range []string{"prefix:", "suffix:", "~prefix:"} {
+		if _, ok := Lookup(name); ok {
+			t.Errorf("%q 参数为空，应拒绝", name)
+		}
+	}
+	// 剥不掉要报错，而不是把值原样放过去
+	conv, _ := Lookup("prefix:SN-")
+	if _, err := conv.Reverse("X-001"); err == nil {
+		t.Error("前缀对不上应报错")
+	}
+	conv, _ = Lookup("suffix:℃")
+	if _, err := conv.Reverse("23.5F"); err == nil {
+		t.Error("后缀对不上应报错")
+	}
+	// 两侧都只收字符串：加的一侧顺手格式化数字，剥回来就成了字符串，
+	// 往返前后类型不一致比直接报错更难排查
+	conv, _ = Lookup("prefix:SN-")
+	for _, bad := range []any{1.0, true, nil, []any{"x"}} {
+		if _, err := conv.Forward(bad); err == nil {
+			t.Errorf("Forward(%#v) 应报错", bad)
+		}
+		if _, err := conv.Reverse(bad); err == nil {
+			t.Errorf("Reverse(%#v) 应报错", bad)
+		}
+	}
+}
+
+// IoT 里常见的方向是设备侧不带、平台侧要带，所以多半配 ~
+func TestAffixInMapping(t *testing.T) {
+	s, err := Compile([]byte(`{"map":{"sn":{"key":"properties.deviceId","convert":"~prefix:SN-"}}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	up, err := s.Uplink([]byte(`{"sn":"001"}`))
+	if err != nil || string(up) != `{"properties":{"deviceId":"SN-001"}}` {
+		t.Fatalf("上行 = %s, %v", up, err)
+	}
+	down, err := s.Downlink(up)
+	if err != nil || string(down) != `{"sn":"001"}` {
+		t.Fatalf("下行 = %s, %v", down, err)
+	}
+	// 设备没按约定带前缀时，错误要带规则定位
+	_, err = s.Downlink([]byte(`{"properties":{"deviceId":"X-001"}}`))
+	if err == nil {
+		t.Fatal("前缀对不上应报错")
+	}
+	for _, frag := range []string{`map["sn"]`, "SN-", "前缀"} {
+		if !strings.Contains(err.Error(), frag) {
+			t.Errorf("报错 %q 应含 %q", err, frag)
+		}
+	}
+}
+
 func TestConvertersListing(t *testing.T) {
 	names := Converters()
 	idx := map[string]bool{}
@@ -376,16 +461,16 @@ func TestConvertersListing(t *testing.T) {
 			t.Fatalf("Converters 未排序: %v", names)
 		}
 	}
-	// 带参转换器族以 ":" 结尾列出（divide 由 TestConverterFactory 注册）。
+	// 带参转换器族以 ":" 结尾列出
 	RegisterFactory("listme", func(string) (Converter, error) { return Converter{}, nil })
-	found := false
+	families := map[string]bool{}
 	for _, n := range Converters() {
-		if n == "listme:" {
-			found = true
-		}
+		families[n] = true
 	}
-	if !found {
-		t.Error("Converters 应把转换器族列成 \"listme:\"")
+	for _, want := range []string{"listme:", "prefix:", "suffix:"} {
+		if !families[want] {
+			t.Errorf("Converters 应把转换器族列成 %q", want)
+		}
 	}
 }
 

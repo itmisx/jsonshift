@@ -182,6 +182,59 @@ func csvField(v any) (string, error) {
 	}
 }
 
+// affixConverter 构造「加/剥固定字符串」的转换器。按转换器的命名约定，
+// Forward 描述的是 A -> B 方向做的事（加），Reverse 是它的逆（剥回去）。
+//
+// 剥的那一侧对不上就报错，而不是把值原样放过去——放过去会让「设备没按约定
+// 加前缀」这类问题一路漏到平台侧才被发现。
+//
+// 两侧都只接受字符串：加的一侧若顺手把数字格式化成字符串，剥回来就变成了
+// 字符串，往返前后类型不一致，这种不对称比直接报错更难排查。
+// 参数原样使用，不做 trim —— 前后空格可能正是约定的一部分。
+func affixConverter(kind, affix string) (Converter, error) {
+	atEnd := kind == "suffix"
+	label := "前缀"
+	if atEnd {
+		label = "后缀"
+	}
+	if affix == "" {
+		return Converter{}, fmt.Errorf("%s 的参数不能为空（要加的%s写在冒号后面，如 %s:SN-）", kind, label, kind)
+	}
+	return Converter{
+		Forward: func(v any) (any, error) {
+			s, err := toString(v)
+			if err != nil {
+				return nil, err
+			}
+			if atEnd {
+				return s + affix, nil
+			}
+			return affix + s, nil
+		},
+		Reverse: func(v any) (any, error) {
+			s, err := toString(v)
+			if err != nil {
+				return nil, err
+			}
+			var out string
+			var ok bool
+			if atEnd {
+				out, ok = strings.CutSuffix(s, affix)
+			} else {
+				out, ok = strings.CutPrefix(s, affix)
+			}
+			if !ok {
+				where := "开头"
+				if atEnd {
+					where = "结尾"
+				}
+				return nil, fmt.Errorf("%q 的%s不是 %q（没有这个%s可剥）", s, where, affix, label)
+			}
+			return out, nil
+		},
+	}, nil
+}
+
 func init() {
 	Register(Converter{
 		Name: "string2int",
@@ -365,6 +418,14 @@ func init() {
 			return strings.Join(parts, ","), nil
 		},
 	})
+
+	// prefix:X / suffix:X —— 给值拼一段固定字符串，反向剥掉。
+	// 纯粹的加减字符，恰好是可逆的，所以归转换器而不是（只处理数值的）表达式。
+	for _, kind := range []string{"prefix", "suffix"} {
+		RegisterFactory(kind, func(arg string) (Converter, error) {
+			return affixConverter(kind, arg)
+		})
+	}
 
 	// json2object：A 侧是内嵌的 JSON 字符串，B 侧是展开后的对象/数组。
 	Register(Converter{

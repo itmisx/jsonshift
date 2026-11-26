@@ -1,0 +1,9 @@
+# 测试与覆盖率产物
+*.out
+*.test
+coverage.html
+
+# 编辑器与系统
+.idea/
+.vscode/
+.DS_Store
